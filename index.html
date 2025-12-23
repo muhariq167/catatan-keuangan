@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catatan Keuangan - Gratis</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <!-- SheetJS untuk Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+        :root { --primary: #4361ee; --secondary: #3f37c9; --success: #4cc9f0; --danger: #f72585; --light: #f8f9fa; --dark: #212529; }
+        body { background: #f5f7fb; color: var(--dark); line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        /* Header */
+        header { background: linear-gradient(to right, var(--primary), var(--secondary)); color: white; padding: 20px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        .header-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .app-title { font-size: 1.8rem; font-weight: 700; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .user-avatar { width: 40px; height: 40px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: bold; }
+        
+        /* Auth Page */
+        .auth-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+        .auth-card { background: white; border-radius: 10px; padding: 40px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .auth-title { text-align: center; margin-bottom: 30px; color: var(--primary); }
+        .auth-tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
+        .auth-tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; border-bottom: 3px solid transparent; }
+        .auth-tab.active { border-bottom: 3px solid var(--primary); color: var(--primary); font-weight: 600; }
+        
+        /* Navigation */
+        .nav-tabs { display: flex; background: white; border-radius: 10px; overflow: hidden; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .tab { flex: 1; text-align: center; padding: 15px; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; }
+        .tab.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: rgba(67, 97, 238, 0.05); }
+        .tab i { margin-right: 8px; }
+        
+        /* Cards */
+        .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .card-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; color: var(--primary); display: flex; align-items: center; justify-content: space-between; }
+        
+        /* Forms */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; }
+        input, select, textarea { width: 100%; padding: 12px 15px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 1rem; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2); }
+        .form-row { display: flex; gap: 15px; }
+        .form-row .form-group { flex: 1; }
+        
+        /* Buttons */
+        .btn { padding: 12px 20px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--secondary); }
+        .btn-success { background: #2ecc71; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-block { width: 100%; }
+        .btn-sm { padding: 8px 12px; font-size: 0.9rem; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .form-row { flex-direction: column; }
+            .header-content { flex-direction: column; gap: 10px; text-align: center; }
+            .tab span { display: none; }
+            .tab i { margin-right: 0; font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Page -->
+    <div id="auth-page" class="auth-container">
+        <div class="auth-card">
+            <h1 class="auth-title"><i class="fas fa-wallet"></i> Catatan Keuangan</h1>
+            <div class="auth-tabs">
+                <div class="auth-tab active" data-tab="login">Login</div>
+                <div class="auth-tab" data-tab="register">Register</div>
+            </div>
+            <!-- Login Form -->
+            <div id="login-form">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="email@contoh.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="Password">
+                </div>
+                <button class="btn btn-primary btn-block" id="login-btn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+            </div>
+            <!-- Register Form -->
+            <div id="register-form" style="display: none;">
+                <div class="form-group">
+                    <label>Nama Lengkap</label>
+                    <input type="text" id="register-name" placeholder="Nama Lengkap">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="register-email" placeholder="email@contoh.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="register-password" placeholder="Minimal 6 karakter">
+                </div>
+                <button class="btn btn-primary btn-block" id="register-btn">
+                    <i class="fas fa-user-plus"></i> Daftar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main App -->
+    <div id="app-page" style="display: none;">
+        <header>
+            <div class="container">
+                <div class="header-content">
+                    <div class="app-title"><i class="fas fa-wallet"></i> Catatan Keuangan</div>
+                    <div class="user-info">
+                        <span id="user-name">Pengguna</span>
+                        <div class="user-avatar" id="user-avatar">U</div>
+                        <button class="btn btn-sm btn-danger" id="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <div class="container">
+            <!-- Navigation -->
+            <div class="nav-tabs">
+                <div class="tab active" data-tab="dashboard"><i class="fas fa-home"></i><span>Dashboard</span></div>
+                <div class="tab" data-tab="transactions"><i class="fas fa-exchange-alt"></i><span>Transaksi</span></div>
+                <div class="tab" data-tab="accounts"><i class="fas fa-credit-card"></i><span>Rekening</span></div>
+                <div class="tab" data-tab="export"><i class="fas fa-file-excel"></i><span>Export Excel</span></div>
+            </div>
+            
+            <!-- Dashboard -->
+            <div id="dashboard-section" class="tab-content">
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fas fa-chart-line"></i> Ringkasan Keuangan
+                        <button class="btn btn-sm btn-primary" id="refresh-data"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                    <div class="summary-cards" id="summary-cards">
+                        <!-- Summary will load here -->
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-history"></i> Transaksi Terbaru</div>
+                    <div id="recent-transactions">
+                        <!-- Recent transactions will load here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Transactions -->
+            <div id="transactions-section" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fas fa-list"></i> Daftar Transaksi
+                        <button class="btn btn-sm btn-primary" id="add-transaction-btn"><i class="fas fa-plus"></i> Tambah</button>
+                    </div>
+                    <div id="transactions-list">
+                        <!-- Transactions will load here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Accounts -->
+            <div id="accounts-section" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fas fa-piggy-bank"></i> Rekening Saya
+                        <button class="btn btn-sm btn-primary" id="add-account-btn"><i class="fas fa-plus"></i> Tambah</button>
+                    </div>
+                    <div class="rekening-list" id="accounts-list">
+                        <!-- Accounts will load here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Export Excel -->
+            <div id="export-section" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-file-excel"></i> Export ke Excel</div>
+                    <div class="excel-controls">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Dari Tanggal</label>
+                                <input type="date" id="export-from-date">
+                            </div>
+                            <div class="form-group">
+                                <label>Sampai Tanggal</label>
+                                <input type="date" id="export-to-date">
+                            </div>
+                        </div>
+                        <button class="btn btn-success btn-block" id="export-excel-btn">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                    </div>
+                    <div id="export-preview"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== FIREBASE CONFIG ==========
+        // SALIN CONFIG DARI FIREBASE CONSOLE ANDA DI SINI
+        const firebaseConfig = {
+            apiKey: "GANTI_DENGAN_API_KEY_ANDA",
+            authDomain: "GANTI_DENGAN_AUTH_DOMAIN_ANDA",
+            projectId: "GANTI_DENGAN_PROJECT_ID_ANDA",
+            storageBucket: "GANTI_DENGAN_STORAGE_BUCKET_ANDA",
+            messagingSenderId: "GANTI_DENGAN_MESSAGING_SENDER_ID_ANDA",
+            appId: "GANTI_DENGAN_APP_ID_ANDA"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // ========== APLIKASI CATATAN KEUANGAN ==========
+        let currentUser = null;
+        let transactions = [];
+        let accounts = [];
+        let categories = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initApp();
+        });
+
+        async function initApp() {
+            setupEventListeners();
+            checkAuthState();
+            setupExportDates();
+        }
+
+        function checkAuthState() {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    currentUser = user;
+                    showApp();
+                    loadUserData();
+                } else {
+                    showAuth();
+                }
+            });
+        }
+
+        function showAuth() {
+            document.getElementById('auth-page').style.display = 'flex';
+            document.getElementById('app-page').style.display = 'none';
+        }
+
+        function showApp() {
+            document.getElementById('auth-page').style.display = 'none';
+            document.getElementById('app-page').style.display = 'block';
+            document.getElementById('user-name').textContent = currentUser.displayName || currentUser.email;
+            document.getElementById('user-avatar').textContent = (currentUser.displayName || currentUser.email).charAt(0).toUpperCase();
+        }
+
+        function setupEventListeners() {
+            // Auth Tabs
+            document.querySelectorAll('.auth-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.getAttribute('data-tab');
+                    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    if (tabName === 'login') {
+                        document.getElementById('login-form').style.display = 'block';
+                        document.getElementById('register-form').style.display = 'none';
+                    } else {
+                        document.getElementById('login-form').style.display = 'none';
+                        document.getElementById('register-form').style.display = 'block';
+                    }
+                });
+            });
+
+            // Login
+            document.getElementById('login-btn').addEventListener('click', async () => {
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                } catch (error) {
+                    alert('Login gagal: ' + error.message);
+                }
+            });
+
+            // Register
+            document.getElementById('register-btn').addEventListener('click', async () => {
+                const name = document.getElementById('register-name').value;
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+                
+                try {
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    await userCredential.user.updateProfile({ displayName: name });
+                    
+                    await db.collection('users').doc(userCredential.user.uid).set({
+                        name: name,
+                        email: email,
+                        createdAt: new Date().toISOString()
+                    });
+                    
+                    alert('Registrasi berhasil!');
+                } catch (error) {
+                    alert('Registrasi gagal: ' + error.message);
+                }
+            });
+
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', () => {
+                auth.signOut();
+            });
+
+            // Navigation Tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabId = tab.getAttribute('data-tab');
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+                    
+                    document.getElementById(tabId + '-section').style.display = 'block';
+                    
+                    if (tabId === 'dashboard') updateDashboard();
+                });
+            });
+
+            // Add Transaction
+            document.getElementById('add-transaction-btn').addEventListener('click', () => {
+                showTransactionModal();
+            });
+
+            // Add Account
+            document.getElementById('add-account-btn').addEventListener('click', () => {
+                showAccountModal();
+            });
+
+            // Refresh Data
+            document.getElementById('refresh-data').addEventListener('click', loadUserData);
+
+            // Export Excel
+            document.getElementById('export-excel-btn').addEventListener('click', exportToExcel);
+        }
+
+        async function loadUserData() {
+            if (!currentUser) return;
+            
+            try {
+                // Load transactions
+                const transactionsSnapshot = await db.collection('users').doc(currentUser.uid)
+                    .collection('transactions').orderBy('date', 'desc').get();
+                transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Load accounts
+                const accountsSnapshot = await db.collection('users').doc(currentUser.uid)
+                    .collection('accounts').get();
+                accounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Load categories
+                const categoriesSnapshot = await db.collection('users').doc(currentUser.uid)
+                    .collection('categories').get();
+                
+                if (categoriesSnapshot.empty) {
+                    // Add default categories
+                    const defaultCategories = [
+                        { name: 'Makan', type: 'expense' },
+                        { name: 'Minum', type: 'expense' },
+                        { name: 'Bensin', type: 'expense' },
+                        { name: 'Kebutuhan Lainnya', type: 'expense' },
+                        { name: 'Gaji', type: 'income' },
+                        { name: 'Lainnya', type: 'income' },
+                        { name: 'Transfer', type: 'transfer' }
+                    ];
+                    
+                    for (const cat of defaultCategories) {
+                        await db.collection('users').doc(currentUser.uid)
+                            .collection('categories').add(cat);
+                    }
+                    
+                    categories = defaultCategories;
+                } else {
+                    categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }
+
+                updateDashboard();
+                updateTransactionsList();
+                updateAccountsList();
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                alert('Gagal memuat data');
+            }
+        }
+
+        function updateDashboard() {
+            // Calculate summary
+            let totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+            let totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+            let totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+
+            // Update summary cards
+            document.getElementById('summary-cards').innerHTML = `
+                <div class="summary-card">
+                    <div class="summary-title">Total Pendapatan</div>
+                    <div class="summary-amount" style="color: #2ecc71;">Rp ${formatCurrency(totalIncome)}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-title">Total Pengeluaran</div>
+                    <div class="summary-amount" style="color: #e74c3c;">Rp ${formatCurrency(totalExpense)}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-title">Saldo Total</div>
+                    <div class="summary-amount" style="color: #3498db;">Rp ${formatCurrency(totalBalance)}</div>
+                </div>
+            `;
+
+            // Show recent transactions
+            const recentHTML = transactions.slice(0, 5).map(t => {
+                return `
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <div class="transaction-category">${t.category}</div>
+                            <div class="transaction-desc">${t.description || '-'}</div>
+                            <div class="transaction-date">${formatDate(t.date)}</div>
+                        </div>
+                        <div class="transaction-amount ${t.type}">
+                            ${t.type === 'income' ? '+' : '-'}Rp ${formatCurrency(t.amount)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('recent-transactions').innerHTML = recentHTML || 
+                '<p style="text-align: center; color: #666;">Belum ada transaksi</p>';
+        }
+
+        function updateTransactionsList() {
+            const html = transactions.map(t => {
+                return `
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <div class="transaction-category">${t.category}</div>
+                            <div class="transaction-desc">${t.description || '-'}</div>
+                            <div class="transaction-date">${formatDate(t.date)}</div>
+                        </div>
+                        <div class="transaction-amount ${t.type}">
+                            ${t.type === 'income' ? '+' : '-'}Rp ${formatCurrency(t.amount)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('transactions-list').innerHTML = html || 
+                '<p style="text-align: center; color: #666;">Belum ada transaksi</p>';
+        }
+
+        function updateAccountsList() {
+            const html = accounts.map(acc => `
+                <div class="rekening-card">
+                    <div class="rekening-name">
+                        <i class="fas fa-university"></i>
+                        ${acc.name}
+                    </div>
+                    <div class="rekening-balance">Rp ${formatCurrency(acc.balance)}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('accounts-list').innerHTML = html || 
+                '<p style="text-align: center; color: #666;">Belum ada rekening</p>';
+        }
+
+        function showTransactionModal() {
+            const type = prompt('Tipe transaksi (income/expense/transfer):', 'expense');
+            const category = prompt('Kategori:');
+            const amount = prompt('Jumlah:');
+            const description = prompt('Keterangan (opsional):');
+            
+            if (type && category && amount) {
+                saveTransaction({
+                    type: type,
+                    category: category,
+                    amount: parseInt(amount),
+                    description: description || '',
+                    date: new Date().toISOString().split('T')[0]
+                });
+            }
+        }
+
+        async function saveTransaction(transaction) {
+            try {
+                await db.collection('users').doc(currentUser.uid)
+                    .collection('transactions').add(transaction);
+                loadUserData();
+                alert('Transaksi berhasil disimpan!');
+            } catch (error) {
+                alert('Gagal menyimpan transaksi: ' + error.message);
+            }
+        }
+
+        function showAccountModal() {
+            const name = prompt('Nama rekening:');
+            const balance = prompt('Saldo awal:');
+            
+            if (name && balance) {
+                saveAccount({
+                    name: name,
+                    balance: parseInt(balance),
+                    createdAt: new Date().toISOString()
+                });
+            }
+        }
+
+        async function saveAccount(account) {
+            try {
+                await db.collection('users').doc(currentUser.uid)
+                    .collection('accounts').add(account);
+                loadUserData();
+                alert('Rekening berhasil ditambahkan!');
+            } catch (error) {
+                alert('Gagal menambah rekening: ' + error.message);
+            }
+        }
+
+        function setupExportDates() {
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            document.getElementById('export-from-date').valueAsDate = firstDay;
+            document.getElementById('export-to-date').valueAsDate = today;
+        }
+
+        function exportToExcel() {
+            const fromDate = document.getElementById('export-from-date').value;
+            const toDate = document.getElementById('export-to-date').value;
+            
+            const filtered = transactions.filter(t => {
+                const date = new Date(t.date);
+                const from = new Date(fromDate);
+                const to = new Date(toDate);
+                to.setHours(23, 59, 59, 999);
+                return date >= from && date <= to;
+            });
+            
+            if (filtered.length === 0) {
+                alert('Tidak ada data untuk diexport');
+                return;
+            }
+            
+            const excelData = filtered.map(t => ({
+                'Tanggal': formatDate(t.date),
+                'Tipe': t.type,
+                'Kategori': t.category,
+                'Jumlah': t.amount,
+                'Keterangan': t.description || ''
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Transaksi');
+            
+            const filename = `Laporan_Keuangan_${formatDate(fromDate)}_${formatDate(toDate)}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            
+            document.getElementById('export-preview').innerHTML = `
+                <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                    <p><strong>Export berhasil!</strong></p>
+                    <p>File: ${filename}</p>
+                    <p>Total data: ${filtered.length} transaksi</p>
+                </div>
+            `;
+        }
+
+        // Utility functions
+        function formatCurrency(amount) {
+            return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID');
+        }
+
+        // Add additional styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+            .summary-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+            .summary-title { font-size: 0.9rem; color: #666; margin-bottom: 10px; }
+            .summary-amount { font-size: 1.5rem; font-weight: 700; }
+            .transaction-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #e0e0e0; }
+            .transaction-info { flex: 1; }
+            .transaction-category { font-weight: 600; }
+            .transaction-desc { font-size: 0.9rem; color: #666; margin-top: 5px; }
+            .transaction-date { font-size: 0.85rem; color: #666; margin-top: 5px; }
+            .transaction-amount { font-weight: 700; font-size: 1.1rem; }
+            .transaction-amount.income { color: #2ecc71; }
+            .transaction-amount.expense { color: #e74c3c; }
+            .transaction-amount.transfer { color: #9b59b6; }
+            .rekening-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
+            .rekening-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid var(--primary); }
+            .rekening-name { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+            .rekening-balance { font-size: 1.5rem; font-weight: 700; }
+            .excel-controls { margin-bottom: 20px; }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
